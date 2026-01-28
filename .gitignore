@@ -1,0 +1,16 @@
+raw_data/
+requirements.txt
+raw_data/ARC-AGI-2/data/eval_color_permute_ttt_9
+outputs/
+src/
+wandb/
+countexteample.csv
+*.pt
+*.pth
+*.ckpt
+*.bin
+*.pyc
+*.safetensors
+checkpoints/
+utils/__pycache__/
+

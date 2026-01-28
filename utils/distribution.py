@@ -11,6 +11,7 @@ def init_distributed_mode(args: argparse.Namespace) -> Tuple[bool, int, int, int
     world_size = max(env_world_size, 1)
     local_rank = int(os.environ.get("LOCAL_RANK", "0"))
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # device = torch.device("cpu")
 
     if not distributed:
         return False, rank, world_size, local_rank, device

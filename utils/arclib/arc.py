@@ -50,13 +50,13 @@ class Example:
         """return the size of the example"""
         return max(self.input_size(), self.output_size())
 
-    def __hash__(self) -> int:
+    def __hash__(self) -> int: #允许对象作为字典的键或集合的元素，基于 input 和 output 的字节表示计算哈希值，提供唯一标识
         return hash((self.input.tobytes(), self.output.tobytes()))
 
-    def __repr__(self) -> str:
+    def __repr__(self) -> str: #提供对象的字符串表示，方便调试和日志记录，能够打印输出可读的字符串表示
         return f"Example(input={self.input}, output={self.output})"
 
-    def serialize(self) -> dict:
+    def serialize(self) -> dict: 
         example = {"input": self.input.tolist(), "output": self.output.tolist()}
 
         if self.cot:

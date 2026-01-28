@@ -135,7 +135,7 @@ def augment_raw_data_split_per_task(
             placeholders ``{base}``, ``{slug}``, and ``{tag}``. The ``slug`` value will
             incorporate permutation indices when applicable.
         dry_run: When ``True`` no files are written; returns the would-be paths.
-        verbose: Emit basic progress information.
+        verbose: Emit basic progress information. 输出基本的进度信息
 
     Returns:
         List of augmented file paths (actual or prospective if ``dry_run``).
@@ -156,7 +156,7 @@ def augment_raw_data_split_per_task(
     if not dry_run:
         output_dir_root.mkdir(parents=True, exist_ok=True)
 
-    all_files = sorted(source_dir.glob("*.json"))
+    all_files = sorted(source_dir.glob("*.json"))[0:3]
     if not all_files:
         raise RuntimeError(f"No JSON task files found under {source_dir}")
 
@@ -205,13 +205,13 @@ def augment_raw_data_split_per_task(
             if limit_per_task is not None and per_file_count >= limit_per_task:
                 break
 
-            slug = _slugify(str(augmenter))
+            slug = _slugify(str(augmenter)) #应该是生成增强方式的标签，大概是这个意思
             filename = _format_filename(
                 filename_template,
                 base=base_name,
                 slug=slug,
                 tag=augmentation_tag,
-            )
+            )#字符串格式化
             output_path = output_dir / filename
 
             rng_seed = (seed * 1_000_003) + (file_index * 97) + aug_index
@@ -282,6 +282,7 @@ def augment_raw_data_split_per_task(
                     if variant_idx == 0:
                         perm_augmenter = PermuteColors()
                         try:
+                            #重新进行一种新的颜色映射生成新的任务Task
                             permuted_task = perm_augmenter.apply_to_task(
                                 base_variant,
                                 rng=perm_rng,

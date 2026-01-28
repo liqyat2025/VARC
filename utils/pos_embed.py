@@ -109,7 +109,7 @@ class VisionRotaryEmbeddingFast(nn.Module):
         super().__init__()
         if custom_freqs:
             freqs = custom_freqs
-        elif freqs_for == 'lang':
+        elif freqs_for == 'lang': #标准的旋转角度的公式
             freqs = 1. / (theta ** (torch.arange(0, dim, 2)[:(dim // 2)].float() / dim))
         elif freqs_for == 'pixel':
             freqs = torch.linspace(1., max_freq / 2, dim // 2) * pi
@@ -136,7 +136,7 @@ class VisionRotaryEmbeddingFast(nn.Module):
         # print('======== shape of rope freq', self.freqs_cos.shape, '========')
 
     def forward(self, t):
-        
+       
         ret = t[:, :, self.no_rope:] * self.freqs_cos + rotate_half(t[:, :, self.no_rope:]) * self.freqs_sin
         if self.no_rope == 0:
             return ret

@@ -2,6 +2,7 @@ import os
 from typing import Any, Dict, Optional
 import torch
 from src.ARC_ViT import ARCViT  
+from src.RARC_ViT import RARCViT
 from src.ARC_UNet import ARCUNet
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.amp import GradScaler
@@ -28,6 +29,18 @@ def get_model_arch(args, train_dataset):
             dropout=args.dropout,
             patch_size=args.patch_size,
         )
+    elif args.architecture =="rvit":
+        model = RARCViT(
+            image_size=args.image_size,
+            num_colors=args.num_colors,
+            embed_dim=args.embed_dim,
+            depth=args.depth,
+            num_heads=args.num_heads,
+            mlp_dim=args.mlp_dim,
+            dropout=args.dropout,
+            patch_size=args.patch_size,
+            cond_dim=args.embed_dim
+        )
     else:
         model = ARCUNet(
             num_tasks=train_dataset.num_tasks,
@@ -41,7 +54,9 @@ def get_model_arch(args, train_dataset):
 
 # Resume from checkpoint if specified
 def load_models(args, train_dataset, device, distributed, rank, local_rank):
+    #resume_checkpoint：指定要恢复训练的检查点文件路径，允许从之前保存的模型状态继续训练，而不是从头开始
     resume_checkpoint = getattr(args, "resume_checkpoint", None)
+    #resume_reset_epoch：如果为True，则忽略检查点中的epoch值，从头开始训练
     resume_reset_epoch = bool(getattr(args, "resume_reset_epoch", False))
     start_epoch = 1
     checkpoint: Optional[Dict[str, Any]] = None

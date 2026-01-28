@@ -1,4 +1,4 @@
-torchrun --nproc_per_node=8 offline_train_ARC.py \
+torchrun --nproc_per_node=4 offline_train_ARC.py \
   --epochs 100 \
   --unet-size big \
   --batch-size 32 \

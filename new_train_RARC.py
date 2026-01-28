@@ -14,7 +14,7 @@ from utils.distribution import init_distributed_mode
 from utils.load_model import load_models
 from utils.wandb_vis import grid_to_pil
 import wandb
-from src.ARC_loader import build_dataloaders, IGNORE_INDEX
+from src.RARC_loader import build_dataloaders, IGNORE_INDEX
 
 
 def _format_eta(seconds: float) -> str:
@@ -47,19 +47,23 @@ def evaluate(
     visualizations = {}
     dataset = getattr(loader, "dataset", None)
     # if dataset is not None and hasattr(dataset, "disable_translation"):
-    dataset.disable_translation()
-    dataset.disable_resolution_augmentation(fix_scale_factor=resolution_factor)
+    # dataset.disable_translation()
+    # dataset.disable_resolution_augmentation(fix_scale_factor=resolution_factor)
 
     for batch in loader:
         inputs = batch["inputs"].to(device)
         attention_mask = batch["attention_mask"].to(device)
         targets = batch["targets"].to(device)
-        task_ids = batch["task_ids"].to(device)
+        # task_ids = batch["task_ids"].to(device)
         offsets = batch["offset"].to(device)
         scale_factors = batch["scale_factors"].to(device)
         raw_outputs = batch["raw_outputs"]
+        backcontex_input=batch["backcontex_input"].to(device)
+        backcontex_mask=batch["backcontex_mask"].to(device)
+        task_names=batch["task_names"]
 
-        logits = model(inputs, task_ids, attention_mask=attention_mask)
+        # logits = model(inputs, task_ids, attention_mask=attention_mask)
+        logits = model(inputs, attention_mask=attention_mask,task_input=backcontex_input,task_mask=backcontex_mask)
 
         num_colors = logits.size(1)
         logits_flat = logits.permute(0, 2, 3, 1).reshape(-1, num_colors)
@@ -87,7 +91,9 @@ def evaluate(
 
             input_grid = inputs[idx]
             mask = attention_mask[idx]
-            visualizations[task_ids[idx].item()] = grid_to_pil(mask, input_grid, target, prediction, IGNORE_INDEX=IGNORE_INDEX)
+            task_name=task_names[idx]
+            # visualizations[task_ids[idx].item()] = grid_to_pil(mask, input_grid, target, prediction, IGNORE_INDEX=IGNORE_INDEX)
+            visualizations[task_name] = grid_to_pil(mask, input_grid, target, prediction, IGNORE_INDEX=IGNORE_INDEX)
 
     if distributed and dist.is_initialized():
         totals = torch.tensor(
@@ -101,10 +107,10 @@ def evaluate(
     avg_loss = total_loss / max(total_pixels, 1)
     accuracy = total_exact / max(total_examples, 1)
 
-    if not args.disable_translation:
-        dataset.enable_translation()
-    if not args.disable_resolution_augmentation:
-        dataset.enable_resolution_augmentation()
+    # if not args.disable_translation:
+    #     dataset.enable_translation()
+    # if not args.disable_resolution_augmentation:
+    #     dataset.enable_resolution_augmentation()
     return avg_loss, accuracy, visualizations
 
 def train(args: argparse.Namespace) -> None:
@@ -121,21 +127,21 @@ def train(args: argparse.Namespace) -> None:
 
     if args.disable_translation: #不进行平移变换增强
         train_dataset.disable_translation()
-        if eval_dataset is not None:
-            eval_dataset.disable_translation()
+        # if eval_dataset is not None:
+        #     eval_dataset.disable_translation()
     else:
         train_dataset.enable_translation() #进行平移变换增强
-        if eval_dataset is not None:
-            eval_dataset.enable_translation()
+        # if eval_dataset is not None:
+        #     eval_dataset.enable_translation()
 
     if args.disable_resolution_augmentation:#这里感觉就是图像的放大和缩小
         train_dataset.disable_resolution_augmentation(fix_scale_factor=args.fix_scale_factor)
-        if eval_dataset is not None:
-            eval_dataset.disable_resolution_augmentation(fix_scale_factor=args.fix_scale_factor)
+        # if eval_dataset is not None:
+        #     eval_dataset.disable_resolution_augmentation(fix_scale_factor=args.fix_scale_factor)
     else:
         train_dataset.enable_resolution_augmentation()
-        if eval_dataset is not None:
-            eval_dataset.enable_resolution_augmentation()
+        # if eval_dataset is not None:
+        #     eval_dataset.enable_resolution_augmentation()
 
     total_train_examples = len(train_dataset)
 
@@ -186,13 +192,15 @@ def train(args: argparse.Namespace) -> None:
                 inputs = batch["inputs"].to(device)
                 attention_mask = batch["attention_mask"].to(device)
                 targets = batch["targets"].to(device)#[2,64,64]
-                task_ids = batch["task_ids"].to(device)
+                # task_ids = batch["task_ids"].to(device)
+                task_token=batch["backcontex_input"].to(device)
+                task_mask=batch["backcontex_mask"].to(device)
 
                 optimizer.zero_grad(set_to_none=True)
                 
                 # Use automatic mixed precision
                 with autocast(device_type=autocast_device_type, enabled=scaler.is_enabled()):
-                    logits = model(inputs, task_ids, attention_mask=attention_mask)#看到这里了，加油
+                    logits = model(inputs, attention_mask=attention_mask,task_input=task_token,task_mask=task_mask)#看到这里了，加油
                     num_colors = logits.size(1) #12
                     logits_flat = logits.permute(0, 2, 3, 1).reshape(-1, num_colors) #[8192，12]
                     loss = F.cross_entropy(
@@ -335,8 +343,9 @@ def train(args: argparse.Namespace) -> None:
                     metrics["eval/loss"] = eval_loss
                     metrics["eval/accuracy"] = eval_acc
                     if (epoch + 1) % args.vis_every == 0:
-                        reverse_task_lookup = {v: k for k, v in eval_dataset.task_lookup.items()}
-                        metrics["visualizations/eval"] = [wandb.Image(v, mode="RGBA", caption=f"task {reverse_task_lookup[k]}") for k, v in visualizations.items()]
+                        # reverse_task_lookup = {v: k for k, v in eval_dataset.task_lookup.items()}
+                        # metrics["visualizations/eval"] = [wandb.Image(v, mode="RGBA", caption=f"task {reverse_task_lookup[k]}") for k, v in visualizations.items()]
+                        metrics["visualizations/eval"] = [wandb.Image(v, mode="RGBA", caption=f"task {k}") for k, v in visualizations.items()]
                 if best_eval_acc > float("-inf"):
                     metrics["eval/best_accuracy"] = best_eval_acc
                 wandb.log(metrics, step=epoch)
@@ -366,14 +375,15 @@ def train(args: argparse.Namespace) -> None:
 if __name__ == "__main__":
     
     args = parse_args()
-    args.no_compile = True #禁用编译优化
-    args.batch_size=2 #使用小批量
-    args.no_amp = True #禁用自动混合精度
-    args.num_attempts = 1 #每个评估示例的尝试次数
-    args.eval_save_name = "eval_predictions.json" #评估预测的保存名称
-    args.distributed = False #禁用分布式训练
-    args.use_wandb = False #禁用WandB
-    args.epochs = 1
-    args.image_size=64
-    args.num_colors= 12 #设置颜色映射为12
+    # args.no_compile = True #禁用编译优化
+    # args.batch_size=2 #使用小批量
+    # args.no_amp = True #禁用自动混合精度
+    # args.num_attempts = 1 #每个评估示例的尝试次数
+    # args.eval_save_name = "eval_predictions.json" #评估预测的保存名称
+    # args.distributed = False #禁用分布式训练
+    # args.use_wandb = False #禁用WandB
+    # args.epochs = 1
+    # args.image_size=64
+    # args.num_colors= 12 #设置颜色映射为12
+    # args.architecture="rvit"
     train(args)

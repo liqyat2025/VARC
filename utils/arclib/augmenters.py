@@ -7,7 +7,7 @@ The augmenters are used to apply transformations to the input and output of the 
 Augmenter: Base class for all augmenters
 Rotate: Rotate the grid by 90, 180, 270 degrees
 PermuteColors: Permute the colors in the grid
-PermuteColorswithMap: Permute the colors in the grid using a given color map
+PermuteColorswithMap: Permute the colors in the grid using a given color map 
 PermuteColorsRespectKeyColors: Permute the colors in the grid while keeping the key colors fixed
 Flip: Flip the grid along the given axis
 Reflect: Reflect the grid along the given axis
@@ -135,15 +135,15 @@ class PermuteColors(Augmenter):
         # get unique colors
         colors = set(colors)
         # remove 0
-        colors = colors - {0}
-        remaining_colors = list(set(list(range(1, 10))) - colors)
+        colors = colors - {0} #除了背景之外的其他出现在该任务中的颜色{2,3,4,6,7,8,9}
+        remaining_colors = list(set(list(range(1, 10))) - colors) #剩余的颜色
         colors = list(colors)
 
-        rng.shuffle(remaining_colors)  # inplac
+        rng.shuffle(remaining_colors)  # inplac 把剩下的颜色打乱
 
-        permuted_colors = rng.permutation(colors).tolist()
+        permuted_colors = rng.permutation(colors).tolist() #[3, 2, 7, 6, 4, 9, 8]
         # sample a mapping from colors to new ids
-        color_map = {0: 0}
+        color_map = {0: 0} #记录重新映射的颜色
 
         for color in colors:
 
@@ -151,7 +151,7 @@ class PermuteColors(Augmenter):
                 continue
 
             if len(remaining_colors) > 0:
-                new_color = remaining_colors.pop()
+                new_color = remaining_colors.pop() #从剩余的颜色中随机选择一个颜色
             else:
                 new_color = permuted_colors.pop()
                 # in this case we want to directly swap colors
@@ -168,7 +168,7 @@ class PermuteColors(Augmenter):
         def color_mapper(color: int) -> int:
             return color_map.get(color, color)
 
-        self.color_mapper = np.vectorize(color_mapper)
+        self.color_mapper = np.vectorize(color_mapper) #np.vectorize() 将只能处理单个值的函数转换为可以处理整个 NumPy 数组的函数，大大简化了数组元素的批量处理代码！
 
         return Task(
             train_examples=[

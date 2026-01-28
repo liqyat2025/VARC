@@ -9,7 +9,7 @@ def add_resume_checkpoints(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument(
         "--resume-skip-task-token",
-        action="store_true",
+        action="store_true", #布尔标志参数，参在即为True，不存在即为False
         help="Ignore task token embedding weights in the checkpoint when resuming.",
     )
     parser.add_argument(
@@ -75,7 +75,7 @@ def parse_args() -> argparse.Namespace:
         default="test",
         help="Which example subset to use when evaluating a split.",
     )
-    parser.add_argument("--architecture", type=str, choices=("vit", "unet"), default="vit", help="ViT or UNet architecture")
+    parser.add_argument("--architecture", type=str, choices=("vit", "unet","rvit"), default="vit", help="ViT or UNet architecture")
     parser.add_argument("--unet-size", type=str, choices=("small", "medium", "big"), default="medium", help="Choose the size of UNet wanted; small, medium, or big. Only applies if architecture==unet")
     parser.add_argument("--image-size", type=int, default=30)
     parser.add_argument("--num-colors", type=int, default=10)

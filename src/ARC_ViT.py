@@ -33,7 +33,7 @@ class MultiHeadSelfAttention(nn.Module):
         self.proj_dropout = nn.Dropout(dropout)
 
         half_head_dim = embed_dim // num_heads // 2
-        self.rotary = VisionRotaryEmbeddingFast(
+        self.rotary = VisionRotaryEmbeddingFast( #旋转位置编码
             dim=half_head_dim,
             pt_seq_len=int(max_seq_len ** 0.5),
             no_rope=no_rope,
@@ -46,9 +46,9 @@ class MultiHeadSelfAttention(nn.Module):
     ) -> torch.Tensor:
         batch_size, seq_len, _ = x.shape
 
-        qkv = self.qkv(x)
-        qkv = qkv.view(batch_size, seq_len, 3, self.num_heads, self.head_dim)
-        qkv = qkv.permute(2, 0, 3, 1, 4)
+        qkv = self.qkv(x)#[b,s,d]->[b,s,3*d]
+        qkv = qkv.view(batch_size, seq_len, 3, self.num_heads, self.head_dim) #
+        qkv = qkv.permute(2, 0, 3, 1, 4)#
         q, k, v = qkv[0], qkv[1], qkv[2]
 
         q = self.rotary(q)
@@ -200,6 +200,7 @@ class ARCViT(nn.Module):
         self.color_embed = nn.Embedding(num_colors, embed_dim)
         self.task_token_embed = nn.Embedding(num_tasks, embed_dim * self.num_task_tokens)
         self.patch_embed = PatchEmbed(image_size, patch_size, embed_dim, embed_dim, bias=True)
+        #  PatchEmbed(64, 2, 256, 256, bias=True)
 
         total_seq_len = self.num_task_tokens + self.seq_length
         self.positional_embed = nn.Parameter(torch.zeros(1, self.seq_length, embed_dim))
