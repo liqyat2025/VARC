@@ -99,7 +99,7 @@ class ARCDataset(Dataset):
     def __init__(
         self,
         root: Path, #'raw_data/ARC-AGI'
-        split: str, #'training' or 'test'
+        split: str, #'training' or "eval_color_permute_ttt_9/${file_name"
         subset: str = "train",
         max_size: int = 32,
         task_lookup: Optional[Dict[str, int]] = None,
@@ -140,7 +140,7 @@ class ARCDataset(Dataset):
             with file_path.open("r") as fh:
                 task_data = json.load(fh)
 
-            examples = task_data.get(examples_key, [])
+            examples = task_data.get(examples_key, []) #只加载每个任务的训练示例
          
             # Load the original training/test examples, and do translation and scaling augmentation on-the-fly
             for example_index, example in enumerate(examples):
@@ -322,7 +322,7 @@ class ARCDataset(Dataset):
     
 def build_dataloaders(
     args: argparse.Namespace,
-    *,
+    *, #*之后的参数必须用关键字参数的方式传入，不能再用位置参数
     distributed: bool = False,
     rank: int = 0,
     world_size: int = 1,
@@ -336,7 +336,7 @@ def build_dataloaders(
             extra_limit = args.rearc_limit
 
 
-    train_split = getattr(args, "train_split", "training")
+    train_split = getattr(args, "train_split", "training")#"train_split" 表明这是验证集，或者ttt
     train_dataset = ARCDataset(
         root,
         train_split,
@@ -397,225 +397,5 @@ def build_dataloaders(
     return train_dataset, train_loader, eval_dataset, eval_loader, train_sampler, eval_sampler
 
 
-class PairConcatARCDataset(ARCDataset):
-    """
-    将同一个任务的前两个示例样本两两配对，进行垂直拼接
-    每个返回的样本 = sample_i + sample_j (垂直拼接)
-    """
-    
-    def __init__(
-        self,
-        root: Path,
-        split: str,
-        subset: str = "train",
-        max_size: int = 32,
-        task_lookup: Optional[Dict[str, int]] = None,
-        extra_train_roots: Optional[Iterable[Path]] = None,
-        extra_train_limit: Optional[int] = None,
-    ) -> None:
-        # 先调用父类初始化，加载所有样本
-        super().__init__(
-            root=root,
-            split=split,
-            subset=subset,
-            max_size=max_size,
-            task_lookup=task_lookup,
-            extra_train_roots=extra_train_roots,
-            extra_train_limit=extra_train_limit,
-        )
-        
-        # 重新组织样本：按任务分组，然后两两配对
-        self.paired_samples = self._create_sample_pairs()
-        
-    def _create_sample_pairs(self) -> List[Dict]:
-        """将样本按任务分组，每两个样本配成一对"""
-        from collections import defaultdict
-        
-        # 按任务分组
-        task_groups = defaultdict(list)
-        for sample in self.samples:
-            task_id = sample["task_index"]
-            task_groups[task_id].append(sample)
-        
-        paired_samples = []
-        
-        for task_id, task_samples in task_groups.items():
-            # 只对每个任务的前两个样本进行配对
-            if len(task_samples) >= 2:
-                 # 按 example_index 排序（确保顺序正确）
-                task_samples.sort(key=lambda x: x["example_index"])
-
-                sample1 = task_samples[0]  # example_index = 0
-                sample2 = task_samples[1]  # example_index = 1
-           
-                
-                # 创建配对样本
-                paired_sample = {
-                    "sample1": sample1,
-                    "sample2": sample2,
-                    "task_index": task_id,
-                    "task_name": sample1["task_name"],  # 保持任务名
-                }
-                paired_samples.append(paired_sample)
-        
-        print(f"Created {len(paired_samples)} paired samples from {len(self.samples)} original samples")
-        print(f"Each paired sample combines example_index 0 and 1 from each task")
-        return paired_samples
-    
-    def __len__(self) -> int:
-        return len(self.paired_samples)
-    
-    def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
-        paired_sample = self.paired_samples[idx]
-        
-        # 获取两个样本的处理结果
-        sample1_data = self._process_single_sample(paired_sample["sample1"])
-        sample2_data = self._process_single_sample(paired_sample["sample2"])
-        
-        # 提取各个部分
-        input1 = sample1_data["input_grid"]      # (64, 64)
-        output1 = sample1_data["output_grid"]    # (64, 64)
-        input_mask1 = sample1_data["input_mask"] # (64, 64)
-        output_mask1 = sample1_data["output_mask"] # (64, 64)
-        
-        input2 = sample2_data["input_grid"]      # (64, 64)
-        output2 = sample2_data["output_grid"]    # (64, 64)
-        input_mask2 = sample2_data["input_mask"] # (64, 64)
-        output_mask2 = sample2_data["output_mask"] # (64, 64)
-        
-         # 水平拼接 input+output
-        sample1_combined = torch.cat([input1, output1], dim=1)  # (64, 128）
-        sample1_attentionmask=torch.cat([input_mask1 , output_mask1], dim=1)
-        sample2_combined = torch.cat([input2, output2], dim=1)  # (64, 128)
-        sample2_attentionmask=torch.cat([input_mask2 , output_mask2], dim=1)
-
-        #竖直拼接
-        combined_input = torch.cat([sample1_combined, sample2_combined], dim=0)
-        combined_mask=torch.cat([sample1_attentionmask, sample2_attentionmask], dim=0)
-        
-        
-    
-        return {
-            "inputs": combined_input,           # (128, 64) - 垂直拼接后的输入
-            "attention_mask": combined_mask,    # (128, 64) - 对应的掩码     # (128, 64) - 拼接后的目标
-            "task_id": torch.tensor(paired_sample["task_index"], dtype=torch.long),
-            "task_name": paired_sample["task_name"],
-            # 可选：保留原始样本信息用于调试
-            "sample1_data": sample1_data,
-            "sample2_data": sample2_data,
-        }
-    
-    def _process_single_sample(self, sample: Dict) -> Dict[str, torch.Tensor]:
-        """处理单个样本，返回标准格式的数据"""
-      
-        
-        example = sample["example"]
-        task_index = sample["task_index"]
-        task_name = sample["task_name"]
-        example_index = sample["example_index"]
-
-        max_cur_y = len(example["input"])
-        max_cur_x = len(example["input"][0]) 
-        if "output" in example:
-            max_cur_y = max(max_cur_y, len(example["output"]))
-            max_cur_x = max(max_cur_x, len(example["output"][0]))
-        # max_img_size = self.max_size - 2  # Leave border
-        max_img_size = self.max_size
-        max_size = self.max_size
-   
-
-        x_offset = 1
-        y_offset = 1
-
-        input_grid, input_mask, _, _ = pad_grid_with_translation(example["input"], max_size, x_offset, y_offset, output_shape=False)
-
-        if "output" in example: ##target_h, target_w放大后图片的大小
-            target_grid, target_mask, target_h, target_w = pad_grid_with_translation(example["output"], max_size, x_offset, y_offset, output_shape=False)
-        else:
-            target_grid = torch.full((max_size, max_size), IGNORE_INDEX, dtype=torch.long)
-            target_mask = torch.zeros((max_size, max_size), dtype=torch.long)
-            target_h = 0
-            target_w = 0
-
-        target_grid = target_grid.clone()
-        # target_grid[target_mask == 0] = IGNORE_INDEX
-
-        raw_input = example.get("input", [])
-        raw_output = example.get("output") if "output" in example else None
-
-        return {
-                "input_grid": input_grid,
-                "input_mask": input_mask,
-                "output_grid": target_grid,
-                "output_mask":target_mask,
-                "task_id": torch.tensor(task_index, dtype=torch.long),
-                "task_name": task_name,
-                "example_index": torch.tensor(example_index, dtype=torch.long),
-                "target_shape": torch.tensor([target_h, target_w], dtype=torch.long),
-                "raw_input": raw_input,
-                "raw_output": raw_output,
-            
-            }
-
-
-        
-        # # 调用父类的 _process_example 方法
-        # processed = self._process_example(
-        #     example=example,
-        #     task_index=task_index,
-        #     task_name=task_name,
-        #     example_index=example_index,
-        #     if_translation=self.translation_enabled,
-        #     rng=self.rng,
-        # )
-        
-        # return processed
-
-
-if __name__ == "__main__":
-    # import argparse
-    # from utils.args import parse_args
-    # from utils.distribution import init_distributed_mode
-    from torch.utils.data import DataLoader
-    
-    # # 解析参数（复用现有配置）
-    # args = parse_args()
-    # args.no_compile = True
-    # args.batch_size = 1  # 测试用小 batch
-    # args.no_amp = True
-    # args.num_attempts = 1
-    # args.eval_save_name = "test"
-    # args.distributed = False
-    # args.use_wandb = False
-    # args.epochs = 1
-    # args.image_size = 64
-    # args.num_colors = 12
-    
-    # # 初始化设备
-    # distributed, rank, world_size, local_rank, device = init_distributed_mode(args)
-    
-    # 创建数据集
-    dataset = PairConcatARCDataset(
-        root="/root/localdisk/VARC/raw_data/ARC-AGI",
-        split="training", 
-        subset="train",
-        max_size=32,
-    )
-    
-    # 创建 dataloader
-    dataloader = DataLoader(dataset, batch_size=1, shuffle=False)
-    
-    # 获取一个 batch（在这里设置断点调试）
-    batch = next(iter(dataloader))
-    
-    # 在这里设置断点，检查 batch 的内容
-    print("数据加载成功！在这一行设置断点来检查 batch 内容")
-    print(f"batch keys: {list(batch.keys())}")
-    
-    # 示例：检查主要字段的形状
-    if "inputs" in batch:
-        print(f"inputs shape: {batch['inputs'].shape}")
-    if "attention_mask" in batch:
-        print(f"attention_mask shape: {batch['attention_mask'].shape}")
 
 

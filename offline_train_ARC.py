@@ -108,7 +108,6 @@ def evaluate(
     return avg_loss, accuracy, visualizations
 
 def train(args: argparse.Namespace) -> None:
-
     distributed, rank, world_size, local_rank, device = init_distributed_mode(args)
     set_seed(args.seed + (rank if distributed else 0))
 
@@ -119,16 +118,16 @@ def train(args: argparse.Namespace) -> None:
         world_size=world_size,
     )
 
-    if args.disable_translation: #不进行平移变换增强
+    if args.disable_translation:
         train_dataset.disable_translation()
         if eval_dataset is not None:
             eval_dataset.disable_translation()
     else:
-        train_dataset.enable_translation() #进行平移变换增强
+        train_dataset.enable_translation()
         if eval_dataset is not None:
             eval_dataset.enable_translation()
 
-    if args.disable_resolution_augmentation:#这里感觉就是图像的放大和缩小
+    if args.disable_resolution_augmentation:
         train_dataset.disable_resolution_augmentation(fix_scale_factor=args.fix_scale_factor)
         if eval_dataset is not None:
             eval_dataset.disable_resolution_augmentation(fix_scale_factor=args.fix_scale_factor)
@@ -185,16 +184,16 @@ def train(args: argparse.Namespace) -> None:
             for step, batch in enumerate(train_loader, 1):
                 inputs = batch["inputs"].to(device)
                 attention_mask = batch["attention_mask"].to(device)
-                targets = batch["targets"].to(device)#[2,64,64]
+                targets = batch["targets"].to(device)
                 task_ids = batch["task_ids"].to(device)
 
                 optimizer.zero_grad(set_to_none=True)
                 
                 # Use automatic mixed precision
                 with autocast(device_type=autocast_device_type, enabled=scaler.is_enabled()):
-                    logits = model(inputs, task_ids, attention_mask=attention_mask)#看到这里了，加油
-                    num_colors = logits.size(1) #12
-                    logits_flat = logits.permute(0, 2, 3, 1).reshape(-1, num_colors) #[8192，12]
+                    logits = model(inputs, task_ids, attention_mask=attention_mask)
+                    num_colors = logits.size(1)
+                    logits_flat = logits.permute(0, 2, 3, 1).reshape(-1, num_colors)
                     loss = F.cross_entropy(
                         logits_flat,
                         targets.view(-1),
@@ -364,16 +363,5 @@ def train(args: argparse.Namespace) -> None:
 
 
 if __name__ == "__main__":
-    
     args = parse_args()
-    args.no_compile = True #禁用编译优化
-    args.batch_size=2 #使用小批量
-    args.no_amp = True #禁用自动混合精度
-    args.num_attempts = 1 #每个评估示例的尝试次数
-    args.eval_save_name = "eval_predictions.json" #评估预测的保存名称
-    args.distributed = False #禁用分布式训练
-    args.use_wandb = False #禁用WandB
-    args.epochs = 1
-    args.image_size=64
-    args.num_colors= 12 #设置颜色映射为12
     train(args)

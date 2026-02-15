@@ -121,17 +121,17 @@ class VisionRotaryEmbeddingFast(nn.Module):
         if ft_seq_len is None: ft_seq_len = pt_seq_len
         t = torch.arange(ft_seq_len) / ft_seq_len * pt_seq_len
 
-        freqs = torch.einsum('..., f -> ... f', t, freqs)
-        freqs = repeat(freqs, '... n -> ... (n r)', r = 2)
-        freqs = broadcat((freqs[:, None, :], freqs[None, :, :]), dim = -1)
+        freqs = torch.einsum('..., f -> ... f', t, freqs) #形状为[32,8]
+        freqs = repeat(freqs, '... n -> ... (n r)', r = 2)#形状为[32,16]
+        freqs = broadcat((freqs[:, None, :], freqs[None, :, :]), dim = -1)# [32，32，32]
 
-        freqs_cos = freqs.cos().view(-1, freqs.shape[-1])
-        freqs_sin = freqs.sin().view(-1, freqs.shape[-1])
+        freqs_cos = freqs.cos().view(-1, freqs.shape[-1]) #[1024,32]
+        freqs_sin = freqs.sin().view(-1, freqs.shape[-1]) #[1024,32]
 
         self.register_buffer("freqs_cos", freqs_cos)
-        self.register_buffer("freqs_sin", freqs_sin)
+        self.register_buffer("freqs_sin", freqs_sin) #注册为模型的缓冲区，不会参与梯度计算
 
-        self.no_rope = no_rope
+        self.no_rope = no_rope 
 
         # print('======== shape of rope freq', self.freqs_cos.shape, '========')
 

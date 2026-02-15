@@ -156,7 +156,7 @@ def augment_raw_data_split_per_task(
     if not dry_run:
         output_dir_root.mkdir(parents=True, exist_ok=True)
 
-    all_files = sorted(source_dir.glob("*.json"))[0:3]
+    all_files = sorted(source_dir.glob("*.json"))
     if not all_files:
         raise RuntimeError(f"No JSON task files found under {source_dir}")
 

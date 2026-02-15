@@ -47,8 +47,8 @@ def evaluate(
     visualizations = {}
     dataset = getattr(loader, "dataset", None)
     # if dataset is not None and hasattr(dataset, "disable_translation"):
-    # dataset.disable_translation()
-    # dataset.disable_resolution_augmentation(fix_scale_factor=resolution_factor)
+    dataset.disable_translation()
+    dataset.disable_resolution_augmentation(fix_scale_factor=resolution_factor)
 
     for batch in loader:
         inputs = batch["inputs"].to(device)
@@ -107,10 +107,10 @@ def evaluate(
     avg_loss = total_loss / max(total_pixels, 1)
     accuracy = total_exact / max(total_examples, 1)
 
-    # if not args.disable_translation:
-    #     dataset.enable_translation()
-    # if not args.disable_resolution_augmentation:
-    #     dataset.enable_resolution_augmentation()
+    if not args.disable_translation:
+        dataset.enable_translation()
+    if not args.disable_resolution_augmentation:
+        dataset.enable_resolution_augmentation()
     return avg_loss, accuracy, visualizations
 
 def train(args: argparse.Namespace) -> None:
@@ -127,21 +127,21 @@ def train(args: argparse.Namespace) -> None:
 
     if args.disable_translation: #不进行平移变换增强
         train_dataset.disable_translation()
-        # if eval_dataset is not None:
-        #     eval_dataset.disable_translation()
+        if eval_dataset is not None:
+            eval_dataset.disable_translation()
     else:
         train_dataset.enable_translation() #进行平移变换增强
-        # if eval_dataset is not None:
-        #     eval_dataset.enable_translation()
+        if eval_dataset is not None:
+            eval_dataset.enable_translation()
 
     if args.disable_resolution_augmentation:#这里感觉就是图像的放大和缩小
         train_dataset.disable_resolution_augmentation(fix_scale_factor=args.fix_scale_factor)
-        # if eval_dataset is not None:
-        #     eval_dataset.disable_resolution_augmentation(fix_scale_factor=args.fix_scale_factor)
+        if eval_dataset is not None:
+            eval_dataset.disable_resolution_augmentation(fix_scale_factor=args.fix_scale_factor)
     else:
         train_dataset.enable_resolution_augmentation()
-        # if eval_dataset is not None:
-        #     eval_dataset.enable_resolution_augmentation()
+        if eval_dataset is not None:
+            eval_dataset.enable_resolution_augmentation()
 
     total_train_examples = len(train_dataset)
 
@@ -228,6 +228,19 @@ def train(args: argparse.Namespace) -> None:
                 
                 # Unscale gradients before clipping
                 scaler.unscale_(optimizer)
+
+                # === 修改/添加的部分：计算并记录 Grad Norm ===
+                # 在梯度裁剪之前获取 Grad Norm，这样能看到最真实的梯度压力
+                total_grad_norm = 0.0
+                for p in model.parameters():
+                    if p.grad is not None:
+                        param_norm = p.grad.detach().data.norm(2)
+                        total_grad_norm += param_norm.item() ** 2
+                total_grad_norm = total_grad_norm ** 0.5
+
+
+
+
                 torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
                 
                 # Optimizer step with scaler
@@ -338,6 +351,7 @@ def train(args: argparse.Namespace) -> None:
                     "train/accuracy": train_acc,
                     "train/epoch_time": epoch_duration,
                     "train/lr": current_lr,
+                    "train/grad_norm": total_grad_norm,
                 }
                 if eval_loss is not None and eval_acc is not None:
                     metrics["eval/loss"] = eval_loss
@@ -375,15 +389,4 @@ def train(args: argparse.Namespace) -> None:
 if __name__ == "__main__":
     
     args = parse_args()
-    # args.no_compile = True #禁用编译优化
-    # args.batch_size=2 #使用小批量
-    # args.no_amp = True #禁用自动混合精度
-    # args.num_attempts = 1 #每个评估示例的尝试次数
-    # args.eval_save_name = "eval_predictions.json" #评估预测的保存名称
-    # args.distributed = False #禁用分布式训练
-    # args.use_wandb = False #禁用WandB
-    # args.epochs = 1
-    # args.image_size=64
-    # args.num_colors= 12 #设置颜色映射为12
-    # args.architecture="rvit"
     train(args)

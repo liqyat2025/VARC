@@ -92,13 +92,13 @@ class ARCTransformerEncoderLayer(nn.Module):
             no_rope=no_rope,
         )
         self.dropout1 = nn.Dropout(dropout)
-        self.norm1 = nn.LayerNorm(embed_dim)
-        self.linear1 = nn.Linear(embed_dim, mlp_dim)
+        self.norm1 = nn.LayerNorm(embed_dim)#256
+        self.linear1 = nn.Linear(embed_dim, mlp_dim)#256,512
         self.activation = nn.GELU()
         self.dropout2 = nn.Dropout(dropout)
-        self.linear2 = nn.Linear(mlp_dim, embed_dim)
+        self.linear2 = nn.Linear(mlp_dim, embed_dim)#512,256
         self.dropout3 = nn.Dropout(dropout)
-        self.norm2 = nn.LayerNorm(embed_dim)
+        self.norm2 = nn.LayerNorm(embed_dim)#256
 
     def forward(
         self,
@@ -167,16 +167,16 @@ class ARCViT(nn.Module):
 
     def __init__(
         self,
-        num_tasks: int,
-        image_size: int = 30,
-        num_colors: int = 10,
-        embed_dim: int = 256,
-        depth: int = 6,
-        num_heads: int = 8,
-        mlp_dim: int = 512,
-        dropout: float = 0.1,
-        num_task_tokens: int = 1,
-        patch_size: int = 2
+        num_tasks: int,  #400
+        image_size: int = 30, #64
+        num_colors: int = 10, #12
+        embed_dim: int = 256, #256
+        depth: int = 6, #6
+        num_heads: int = 8, #8
+        mlp_dim: int = 512, #512
+        dropout: float = 0.1, #0.1
+        num_task_tokens: int = 1, #1
+        patch_size: int = 2 #2  
     ) -> None:
         super().__init__()
 
@@ -215,8 +215,8 @@ class ARCViT(nn.Module):
             )
 
         self.dropout = nn.Dropout(dropout)
-        self.norm = nn.LayerNorm(embed_dim)
-        self.head = nn.Linear(embed_dim, num_colors * (1 if patch_size is None else patch_size)**2)
+        self.norm = nn.LayerNorm(embed_dim)#256
+        self.head = nn.Linear(embed_dim, num_colors * (1 if patch_size is None else patch_size)**2)#256,12*64*64
         self._reset_parameters()
 
     def _reset_parameters(self) -> None:
