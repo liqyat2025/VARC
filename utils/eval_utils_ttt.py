@@ -4,7 +4,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable, Dict, Optional, Tuple
 import numpy as np
-# from analysis import analyze_data
 from utils.analyze_prediction import analyze_data
 import torch
 from torch.utils.data import DataLoader
@@ -156,11 +155,11 @@ def generate_predictions(
     img_size: int,
     eval_split: str,
     attempt_nums: int = 10,
-    task_transform_resolver: Optional[Callable[[str], Tuple[str, Callable]]] = None,
     border_size: int = 1,
     fix_scale_factor: int = 1,
     disable_translation: bool = False,
     if_fix_scale: bool = False,
+    task_transform_resolver: Optional[Callable[[str], Tuple[str, Callable]]] = None,
     save_name = "ttt_eval",
     task_type: str = "ARC-AGI",
 ) -> None:
@@ -209,6 +208,7 @@ def generate_predictions(
 
             for idx, task_name in enumerate(batch["task_names"]):
                 scale_factor = scale_factors[idx].item()
+
                 # Find the base task name and undo transform if any (flip/rotate)
                 if task_transform_resolver:
                     if task_name not in transform_cache:
@@ -245,13 +245,13 @@ def generate_predictions(
                         for i in range(0, len(predict_grid), scale_factor):
                             row = []
                             for j in range(0, len(predict_grid[0]), scale_factor):
-                                block = []
+                                block = [] #记录每一个像素扩大后对应的区域
                                 for di in range(scale_factor):
                                     for dj in range(scale_factor):
                                         if i + di < len(predict_grid) and j + dj < len(predict_grid[0]):
                                             block.append(predict_grid[i + di][j + dj])
                                 if block:
-                                    counts = np.bincount(block)
+                                    counts = np.bincount(block) #统计每个整数值出现的次数
                                     majority_value = int(np.argmax(counts))
                                     row.append(majority_value)
                             downsampled_grid.append(row)

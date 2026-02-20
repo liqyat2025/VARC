@@ -239,8 +239,6 @@ def train(args: argparse.Namespace) -> None:
                 total_grad_norm = total_grad_norm ** 0.5
 
 
-
-
                 torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
                 
                 # Optimizer step with scaler

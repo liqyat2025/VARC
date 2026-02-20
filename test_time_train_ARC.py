@@ -57,7 +57,7 @@ def ttt_once(model, device, distributed, rank, train_loader, train_sampler, eval
                 targets = batch["targets"].to(device)
                 task_ids = batch["task_ids"].to(device)
 
-                optimizer.zero_grad(set_to_none=True)
+                optimizer.zero_grad(set_to_none=True)#每个批次的梯度清零
                 
                 # Use automatic mixed precision
                 with autocast(device_type=autocast_device_type, enabled=scaler.is_enabled()):
@@ -76,7 +76,7 @@ def ttt_once(model, device, distributed, rank, train_loader, train_sampler, eval
                     target = targets[idx]
                     prediction = predictions[idx]
                     valid = target != IGNORE_INDEX
-                    if valid.any():
+                    if valid.any():#这张图有没有任何有效的目标像素
                         is_exact = bool(torch.equal(prediction[valid], target[valid]))
                     else:
                         is_exact = False
@@ -94,7 +94,7 @@ def ttt_once(model, device, distributed, rank, train_loader, train_sampler, eval
                 scaler.step(optimizer)
                 scaler.update()
 
-                running_loss += loss.item() * batch_size
+                running_loss += loss.item() * batch_size #一般loss得到的损失是平均损失，因此要再乘以一个batch的大小
                 sample_count += batch_size
 
                 if total_batches > 0 and is_main_process and step % 10 == 0:  # Update every 10 steps
@@ -210,4 +210,25 @@ def train(args: argparse.Namespace) -> None:
 
 if __name__ == "__main__":
     args = parse_args()
+    args.epochs = 1
+    args.depth = 10
+    args.batch_size = 8
+    args.image_size = 64
+    args.patch_size = 2
+    args.learning_rate = 3e-4
+    args.weight_decay = 0
+    args.embed_dim = 512
+    args.num_heads = 8
+    args.num_colors = 12
+    args.resume_checkpoint = "saves/offline_train_ViT/checkpoint_best.pt"
+    args.lr_scheduler = "cosine"
+    args.train_split = "eval_color_permute_ttt_9/af24b4cc"
+    args.data_root = "raw_data/ARC-AGI"
+    args.eval_split = "eval_color_permute_ttt_9/af24b4cc"
+    args.resume_skip_task_token = True
+    args.architecture = "vit"
+    args.eval_save_name = "ARC_1_eval_ViT"
+    args.num_attempts = 10
+    args.ttt_num_each = 2
+    args.no_compile=True
     train(args)

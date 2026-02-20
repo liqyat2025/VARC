@@ -206,11 +206,65 @@ def train(args: argparse.Namespace) -> None:
 
 if __name__ == "__main__":
     args = parse_args()
-    args.epochs =1
-    args.depth=10
-    args.image_size=64
-    args.patch_size=2
-    args.resume_checkpoint="saves/new_train_RARC/checkpoint_best.pt" 
-    args.data_root="raw_data/ARC-AGI"
-    args.architecture="rvit"
-    train(args)
+ # 基本配置
+    args.epochs = 1
+    args.depth = 10
+    args.batch_size = 8
+    args.image_size = 64
+    args.patch_size = 2
+    args.learning_rate = 1e-4
+    args.weight_decay = 0
+    args.embed_dim = 512
+    args.num_heads = 8
+    args.num_colors = 12
+
+    # 数据路径
+    args.data_root = "raw_data/ARC-AGI"
+    args.train_split = "eval_color_permute_ttt_9/af24b4cc"
+    args.eval_split = "eval_color_permute_ttt_9/af24b4cc"
+    args.eval_save_name = "ARC_1_eval_ViT_infer_only"
+
+    # 关闭编译和 AMP（本地 CPU 更稳）
+    args.no_compile = True
+    args.no_amp = True
+
+    # 推理次数（投票用）
+    # saves\offline_train_ViTD:\code\VARC\saves\new_train_RARC\testcheckpoint_best.pt
+    args.resume_checkpoint = "saves/new_train_RARC/testcheckpoint_best.pt"
+    args.num_attempts = 10
+
+    args.resume_skip_task_token=False
+
+    # 加载数据与模型
+    args.architecture = "rvit"
+
+
+    distributed, rank, world_size, local_rank, device = init_distributed_mode(args)
+    train_dataset, train_loader, eval_dataset, eval_loader, train_sampler, eval_sampler = build_dataloaders(
+        args, distributed=distributed, rank=rank, world_size=world_size
+    )
+
+    model = load_model_only(
+        args=args,
+        train_dataset=train_dataset,
+        device=device,
+        distributed=distributed,
+        rank=rank,
+        local_rank=local_rank
+    )
+
+    # 直接推理（不训练）
+    generate_predictions(
+        model,
+        eval_loader,
+        device,
+        img_size=args.image_size,
+        attempt_nums=args.num_attempts,
+        task_transform_resolver=get_eval_rot_transform_resolver(),
+        fix_scale_factor=args.fix_scale_factor,
+        disable_translation=args.disable_translation,
+        if_fix_scale=args.disable_resolution_augmentation,
+        save_name=args.eval_save_name,
+        eval_split=args.eval_split,
+        task_type=args.data_root.split("/")[-1],
+    )

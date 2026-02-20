@@ -1,0 +1,1 @@
+The offline-trained checkpoint of the VARC-ViT-18M model.

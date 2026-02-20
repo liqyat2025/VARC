@@ -51,7 +51,7 @@ def analyze_data(answer_set, task_names, task_type):
                 if entry['prediction'] == ground_truth:
                     oracle_result = True
                     if rank + 1 not in oracle_rank:
-                        oracle_rank[rank + 1] = 0
+                        oracle_rank[rank + 1] = 0 #这里是统计第几名出现正确答案
                     oracle_rank[rank + 1] += cur_score
                     break
 
