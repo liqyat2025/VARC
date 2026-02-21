@@ -198,11 +198,16 @@ def generate_predictions(
         for batch in tqdm(loader):
             inputs = batch["inputs"].to(device)
             attention_mask = batch["attention_mask"].to(device)
-            task_ids = batch["task_ids"].to(device)
+            # task_ids = batch["task_ids"].to(device)
             offsets = batch['offset'].to(device)
             scale_factors = batch['scale_factors'].to(device)
 
-            logits = model(inputs, task_ids, attention_mask=attention_mask)
+            task_token=batch["backcontex_input"].to(device)
+            task_mask=batch["backcontex_mask"].to(device)
+           
+
+            logits=model(inputs, attention_mask=attention_mask,task_input=task_token,task_mask=task_mask)
+            # logits = model(inputs, attention_mask=attention_mask)
             preds = logits.argmax(dim=1).cpu()
             example_indices = batch["example_indices"].cpu()
 
